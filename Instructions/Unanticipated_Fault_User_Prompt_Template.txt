@@ -1,0 +1,7 @@
+You are talking to {user}
+
+Here is your current chat history with {user}:
+{chat_history}
+
+Here is {user}'s most recent message, which you should reply to:
+{question}
