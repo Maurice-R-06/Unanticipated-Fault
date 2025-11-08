@@ -2,6 +2,7 @@ from openai import OpenAI
 import json
 from config import load_prompt, possible_faults_19, default_model, default_stream, system_prompt_path, user_prompt_template_path, api_key
 import sys
+from datetime import datetime
 sys.path.append(r"D:\Unanticipated Fault Project\Instructions")
 sys.path.append(r"D:\Unanticipated Fault Project\User Profiles")
 
@@ -18,6 +19,8 @@ class UnanticipatedFaultChatAgent:
         model: str = default_model,
         stream: bool = default_stream,
         possible_faults: list[str] = possible_faults_19,
+        save_path: str = None,
+        auto_save: bool = False,
     ):
         
         self.client = OpenAI(api_key=api_key)
@@ -29,6 +32,9 @@ class UnanticipatedFaultChatAgent:
         self.stream = stream
         self.possible_faults = possible_faults
         self.num_rounds = 0
+        self.save_path = save_path
+        self.auto_save = auto_save
+        self.most_recent_ruled_out_faults = [] # The faults that were ruled out in the most recent resposne from agent
         
     def ask(self, question: str) -> str:
         """
@@ -95,19 +101,82 @@ class UnanticipatedFaultChatAgent:
         answer = response.output_text
 
         # Add user question to conversation
-        self.chat_history.append({
+        self.chat_history.append(
             f"{self.name}: {question}"
-        })
+        )
 
         # Add assistant's response to conversation (for context in next question)
-        self.chat_history.append({
+        self.chat_history.append(
             f"Agent: {answer}"
-        })
+        )
 
         answer = json.loads(answer)
-        self.possible_faults = [x for x in self.possible_faults if x not in answer['faults_ruled_out']]
+        self.most_recent_ruled_out_faults = answer['faults_ruled_out']
+        self.possible_faults = [x for x in self.possible_faults if x not in self.most_recent_ruled_out_faults]
         
+        # Auto-save if enabled
+        if self.auto_save and self.save_path:
+            self.save_chat()
+
         return answer
+
+    def save_chat(self, filepath: str = None):
+        """
+        Save the chat history to a JSON file.
+        
+        Args:
+            filepath: Optional path to save the chat. If not provided, uses self.save_path
+        """
+        save_location = filepath or self.save_path
+        
+        if not save_location:
+            print("\n✗ No save path specified.")
+            return
+        
+        try:
+            chat_data = {
+                "session_info": {
+                    "user_name": self.name,
+                    "model": self.model,
+                    "timestamp": datetime.now().isoformat(),
+                    "num_rounds": self.num_rounds,
+                    "possible_faults_remaining": self.possible_faults
+                },
+                "chat_history": self.chat_history
+            }
+            
+            with open(save_location, 'w', encoding='utf-8') as f:
+                json.dump(chat_data, f, indent=2, ensure_ascii=False)
+            
+            print(f"\n✓ Chat saved to: {save_location}\n")
+            
+        except Exception as e:
+            print(f"\n✗ Error saving chat: {e}\n")
+    
+    def load_chat(self, filepath: str):
+        """
+        Load a chat history from a JSON file.
+        
+        Args:
+            filepath: Path to the saved chat file
+        """
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                chat_data = json.load(f)
+            
+            self.chat_history = chat_data.get("chat_history", [])
+            session_info = chat_data.get("session_info", {})
+            self.num_rounds = session_info.get("num_rounds", 0)
+            self.possible_faults = session_info.get("possible_faults_remaining", possible_faults_19)
+            
+            print(f"\n✓ Chat loaded from: {filepath}")
+            print(f"  Rounds: {self.num_rounds}")
+            print(f"  Faults remaining: {len(self.possible_faults)}\n")
+            
+        except FileNotFoundError:
+            print(f"\n✗ File not found: {filepath}\n")
+        except Exception as e:
+            print(f"\n✗ Error loading chat: {e}\n")
 
     def reset(self):
         """Clear conversation history and start fresh."""
@@ -116,7 +185,11 @@ class UnanticipatedFaultChatAgent:
     def delete_last_message(self):
         """Remove the last interaction from conversation history."""
         if len(self.chat_history) >= 2:
+            # Note: You'd need to store faults ruled out per turn to restore them properly
             self.chat_history = self.chat_history[:-2]
+            if self.num_rounds > 0:
+                self.num_rounds -= 1
+            self.possible_faults.extend(self.most_recent_ruled_out_faults)
         else:
             print("\nNo messages to delete.")
 
@@ -166,7 +239,7 @@ class UnanticipatedFaultChatAgent:
 
                 elif question.lower() == 'back':
                     self.delete_last_message()
-                    print("\n✓ Last user and agent messages deleted.\n")
+                    print("\n✓ Last user and agent messages deleted, possible faults restored, num_rounds restored.\n")
                     continue
 
                 # Get response from agent
