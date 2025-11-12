@@ -1,0 +1,18 @@
+{
+    "user_name": "Maurice",
+    "user_role": "Engineering Intern",
+    "profession": "Mechanical Engineering Student",
+    "experience_level": "Beginner",
+    "knowledge_levels": {
+      "thermal_system": "medium",
+      "heat_pump": "medium",
+      "power_system": "medium",
+      "refrigerant_tank_system": "medium",
+      "sensor_system": "medium",
+      "structure_protective_layer_system": "medium",
+      "agent_system": "medium",
+      "health_management_system": "medium"
+    },
+    "communication_style": "direct and to the point",
+    "prefers_detailed_explanations": true
+}

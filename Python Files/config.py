@@ -13,8 +13,8 @@ if not api_key:
     raise ValueError("OPENAI_API_KEY not found in environment variables")
 
 # File paths
-system_prompt_path = r"D:\Unanticipated Fault Project\Instructions\Unanticipated_Fault_System_Prompt.txt"
-user_prompt_template_path = r"D:\Unanticipated Fault Project\Instructions\Unanticipated_Fault_User_Prompt_Template.txt"
+system_prompt_path = r"C:\Users\Lmcoo\Downloads\Unanticipated-Fault\Instructions\Unanticipated_Fault_System_Prompt.txt"
+user_prompt_template_path = r"C:\Users\Lmcoo\Downloads\Unanticipated-Fault\Instructions\Unanticipated_Fault_User_Prompt_Template.txt"
 
 possible_faults_19 = [
     "Refrigerant Leak",
@@ -37,6 +37,17 @@ possible_faults_19 = [
     "Robot Agent Malfunction",
     "Data Acquisition or Sync Error",
 ]
+
+possible_faults_22 = possible_faults_19 + [
+    "Sealant or Adhesive Degradation at Panel Joints",
+    "Delamination Between Structural Layers",
+    "Outside Panel Surface Coating Degradation",
+]
+
+possible_faults = {
+    "19": possible_faults_19,
+    "22": possible_faults_22,
+}
 
 def load_prompt(filepath: str) -> str:
     """Load prompt from file."""

@@ -1,10 +1,11 @@
 from openai import OpenAI
 import json
-from config import load_prompt, possible_faults_19, default_model, default_stream, system_prompt_path, user_prompt_template_path, api_key
+from config import load_prompt, possible_faults, default_model, default_stream, system_prompt_path, user_prompt_template_path, api_key
 import sys
 from datetime import datetime
-sys.path.append(r"D:\Unanticipated Fault Project\Instructions")
-sys.path.append(r"D:\Unanticipated Fault Project\User Profiles")
+sys.path.append(r"C:\Users\Lmcoo\Downloads\Unanticipated-Fault\Instructions")
+sys.path.append(r"C:\Users\Lmcoo\Downloads\Unanticipated-Fault\User Info")
+user_info = json.load(open(r"C:\Users\Lmcoo\Downloads\Unanticipated-Fault\User Info\trial_user_info.json"))
 
 class UnanticipatedFaultChatAgent:
     """
@@ -15,12 +16,13 @@ class UnanticipatedFaultChatAgent:
         self,
         system_prompt: str,
         user_prompt_template: str,
-        name: str,
         model: str = default_model,
         stream: bool = default_stream,
-        possible_faults: list[str] = possible_faults_19,
+        possible_faults: list[str] = possible_faults["22"],
+        user_info: dict = user_info,
         save_path: str = None,
         auto_save: bool = False,
+        max_rounds: int = 10,
     ):
         
         self.client = OpenAI(api_key=api_key)
@@ -28,14 +30,49 @@ class UnanticipatedFaultChatAgent:
         self.system_prompt = system_prompt
         self.user_prompt_template = user_prompt_template
         self.chat_history = []
-        self.name = name
+        self.name = user_info["user_name"]
         self.stream = stream
         self.possible_faults = possible_faults
         self.num_rounds = 0
         self.save_path = save_path
         self.auto_save = auto_save
         self.most_recent_ruled_out_faults = [] # The faults that were ruled out in the most recent resposne from agent
-        
+        self.user_info = user_info
+        self.max_rounds = max_rounds
+
+    def get_function_definitions(self):
+        """Returns the function calling schema for OpenAI."""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "diagnose_fault",
+                    "description": f"Call this function when you have gathered enough evidence to confidently diagnose the fault. This will end the conversation with {self.name}.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "fault_diagnosis": {
+                                "type": "string",
+                                "description": "The specific fault you are diagnosing from the possible_faults list",
+                                "enum": self.possible_faults
+                            },
+                            "reasoning": {
+                                "type": "string",
+                                "description": "Detailed explanation of the evidence and logic that led to this diagnosis"
+                            },
+                            "confidence": {
+                                "type": "integer",
+                                "enum": [1, 2, 3, 4, 5],
+                                "description": "Your confidence level in this diagnosis on a scale of 1 to 5, where 1 is the lowest confidence and 5 is the highest confidence."
+                            }
+                        },
+                        "required": ["fault_diagnosis", "reasoning", "confidence"],
+                        "additionalProperties": False
+                    }
+                }
+            }
+        ]
+
     def ask(self, question: str) -> str:
         """
         Ask a question and get a response. Conversation history is automatically maintained.
@@ -51,7 +88,7 @@ class UnanticipatedFaultChatAgent:
         response = self.client.responses.create(
             model=self.model,
             input=[
-                {"role": "system", "content": self.system_prompt.format(possible_faults=self.possible_faults)},
+                {"role": "system", "content": self.system_prompt.format(possible_faults=self.possible_faults, user_info=self.user_info, max_rounds=self.max_rounds)},
                 {"role": "user", "content": self.user_prompt_template.format(user=self.name, question=question, chat_history=self.chat_history)}
             ],
             text={
@@ -61,13 +98,13 @@ class UnanticipatedFaultChatAgent:
                     "schema": {
                         "type": "object",
                         "properties": {
-                            f"question_for_{self.name}": {
+                            f"message_for_{self.name}": {
                                 "type": "string",
-                                "description": f"Any question you have for {self.name} to answer. This could be about the habitat, the surrounding environment, the current situation, etc."
+                                "description": f"Any message you have for {self.name} to answer. This could be a question, a response to a previous message, or a request for information. Also, this could be about the habitat, the surrounding environment, the current situation, etc."
                             },
-                            "question_motivation": {
+                            "message_motivation": {
                                 "type": "string",
-                                "description": f"The motivation behind the question you are asking {self.name}."
+                                "description": f"The motivation behind the message you are sending to {self.name}."
                             },
                             "faults_ruled_out": {
                                 "type": "array",
@@ -75,7 +112,11 @@ class UnanticipatedFaultChatAgent:
                                     "type": "string",
                                     "description": f"Any faults that can be ruled out based on evidence at hand.",
                                     "enum": self.possible_faults,
-                                }
+                                },
+                            },
+                            "faults_ruled_out_reasoning": {
+                                "type": "string",
+                                "description": f"The reasoning behind the faults that were ruled out this round. If none were ruled out, say 'NA'."
                             },
                             f"suggested_tests_for_{self.name}": {
                                 "type": "array",
@@ -86,19 +127,32 @@ class UnanticipatedFaultChatAgent:
                             }
                         },
                         "required": [
-                            f"question_for_{self.name}",
-                            "question_motivation",
+                            f"message_for_{self.name}",
+                            "message_motivation",
                             "faults_ruled_out",
+                            "faults_ruled_out_reasoning",
                             f"suggested_tests_for_{self.name}"
                         ],
                         "additionalProperties": False
                     },
                     "strict": True
                 }
-            }
+            },
+            # tools=self.get_function_definitions(),
         )
         
-        answer = response.output_text
+        for item in response.output:
+            if item.type == 'function_call':
+                function_call = item.function_call
+                function_name = function_call.name
+                function_arguments = function_call.arguments
+                if function_name == 'diagnose_fault':
+                    answer = function_arguments
+                self.func_call = True
+            else: 
+                answer = response.output_text
+                self.func_call = False
+                break
 
         # Add user question to conversation
         self.chat_history.append(
@@ -111,8 +165,10 @@ class UnanticipatedFaultChatAgent:
         )
 
         answer = json.loads(answer)
-        self.most_recent_ruled_out_faults = answer['faults_ruled_out']
-        self.possible_faults = [x for x in self.possible_faults if x not in self.most_recent_ruled_out_faults]
+        if not(self.func_call):
+            self.most_recent_ruled_out_faults = answer['faults_ruled_out']
+            self.possible_faults = [x for x in self.possible_faults if x not in self.most_recent_ruled_out_faults]
+        self.num_rounds += 1
         
         # Auto-save if enabled
         if self.auto_save and self.save_path:
@@ -167,7 +223,7 @@ class UnanticipatedFaultChatAgent:
             self.chat_history = chat_data.get("chat_history", [])
             session_info = chat_data.get("session_info", {})
             self.num_rounds = session_info.get("num_rounds", 0)
-            self.possible_faults = session_info.get("possible_faults_remaining", possible_faults_19)
+            self.possible_faults = session_info.get("possible_faults_remaining", possible_faults["22"])
             
             print(f"\n✓ Chat loaded from: {filepath}")
             print(f"  Rounds: {self.num_rounds}")
@@ -244,14 +300,16 @@ class UnanticipatedFaultChatAgent:
 
                 # Get response from agent
                 response = self.ask(question)
-                print(f"\nAgent:\nQuestion for {self.name}: {response[f'question_for_{self.name}']}\n")
-                print(f"Question Motivation: {response['question_motivation']}\n")
-                print(f"Faults Ruled Out: {response['faults_ruled_out']}\n")
-                print(f"Suggested Tests: {response[f'suggested_tests_for_{self.name}']}\n")
-                print(f"Possible Faults: {self.possible_faults}\n")
-                self.num_rounds += 1
-                print(f"Round Number: {self.num_rounds}\n")
-            
+                if not(self.func_call):
+                    print(f"\nAgent:\nMessage for {self.name}: {response[f'message_for_{self.name}']}\n")
+                    print(f"Message Motivation: {response['message_motivation']}\n")
+                    print(f"Faults Ruled Out: {response['faults_ruled_out']}\n")
+                    print(f"Faults Ruled Out Reasoning: {response['faults_ruled_out_reasoning']}\n")
+                    print(f"Suggested Tests: {response[f'suggested_tests_for_{self.name}']}\n")
+                    print(f"Possible Faults: {self.possible_faults}\n")
+                    print(f"Round Number: {self.num_rounds}\n")
+                else:
+                    print(f"\nAgent:\n{response}\n")
             except KeyboardInterrupt:
                 print("\n\nChat interrupted.")
                 continue
@@ -278,7 +336,8 @@ if __name__ == "__main__":
     agent = UnanticipatedFaultChatAgent(
         system_prompt=system_prompt,
         user_prompt_template=user_prompt_template,
-        name="Maurice"
+        user_info=user_info,
+        max_rounds=10
     )
     
     # Start interactive chat
