@@ -250,13 +250,18 @@ class UnanticipatedFaultChatAgent:
             f"Agent: {answer}"
         )
 
-        answer = json.loads(answer)
+        try:
+            answer = json.loads(answer)
+        except:
+            print("Error: ", answer)
+            return None
         if not(self.func_call):
             if self.anticipated:
                 self.most_recent_ruled_out_faults = answer['faults_ruled_out']
                 self.possible_faults = [x for x in self.possible_faults if x not in self.most_recent_ruled_out_faults]
             else:
                 self.possible_faults = answer['hypothesized_faults']
+                print("function call: ", self.func_call)
         self.num_rounds += 1
         
         # Auto-save if enabled
@@ -282,6 +287,7 @@ class UnanticipatedFaultChatAgent:
             chat_data = {
                 "session_info": {
                     "user_name": self.name,
+                    "anticipated": self.anticipated,
                     "model": self.model,
                     "timestamp": datetime.now().isoformat(),
                     "num_rounds": self.num_rounds,
@@ -395,11 +401,11 @@ class UnanticipatedFaultChatAgent:
                     if self.anticipated:
                         print(f"Faults Ruled Out: {response['faults_ruled_out']}\n")
                         print(f"Faults Ruled Out Reasoning: {response['faults_ruled_out_reasoning']}\n")
+                        print(f"Possible Faults: {self.possible_faults}\n")
                     else:
-                        print(f"Hypothesized Faults: {response['hypothesized_faults']}\n")
+                        print(f"Hypothesized Faults: {self.possible_faults}\n")
                         print(f"Hypothesized Faults Reasoning: {response['hypothesized_faults_reasoning']}\n")
                     print(f"Suggested Tests: {response[f'suggested_tests_for_{self.name}']}\n")
-                    print(f"Possible Faults: {self.possible_faults}\n")
                     print(f"Round Number: {self.num_rounds}\n")
                 else:
                     print(f"\nAgent:\n{response}\n")
@@ -423,7 +429,7 @@ class UnanticipatedFaultChatAgent:
         print(f"{'='*60}\n")
 
 if __name__ == "__main__":
-    anticipated = True
+    anticipated = False
     if anticipated:
         system_prompt = load_prompt(system_prompt_path)
     else:
@@ -434,7 +440,7 @@ if __name__ == "__main__":
         system_prompt=system_prompt,
         user_prompt_template=user_prompt_template,
         user_info=user_info,
-        max_rounds=5,
+        max_rounds=10,
         possible_faults=possible_faults["22"],
         anticipated=anticipated
     )
