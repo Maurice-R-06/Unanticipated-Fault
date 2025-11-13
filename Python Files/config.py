@@ -14,6 +14,7 @@ if not api_key:
 
 # File paths
 system_prompt_path = r"C:\Users\Lmcoo\Downloads\Unanticipated-Fault\Instructions\Unanticipated_Fault_System_Prompt.txt"
+system_prompt_no_possible_faults_listed_path = r"C:\Users\Lmcoo\Downloads\Unanticipated-Fault\Instructions\Unanticipated_Fault_System_Prompt_No_Possible_Faults_Listed.txt"
 user_prompt_template_path = r"C:\Users\Lmcoo\Downloads\Unanticipated-Fault\Instructions\Unanticipated_Fault_User_Prompt_Template.txt"
 
 possible_faults_19 = [
