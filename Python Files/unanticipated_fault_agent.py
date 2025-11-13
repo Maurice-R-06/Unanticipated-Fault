@@ -45,6 +45,7 @@ class UnanticipatedFaultChatAgent:
         return [
             {
                 "type": "function",
+                "name": "diagnose_fault",
                 "function": {
                     "name": "diagnose_fault",
                     "description": f"Call this function when you have gathered enough evidence to confidently diagnose the fault. This will end the conversation with {self.name}.",
@@ -138,7 +139,7 @@ class UnanticipatedFaultChatAgent:
                     "strict": True
                 }
             },
-            # tools=self.get_function_definitions(),
+            tools=self.get_function_definitions(),
         )
         
         for item in response.output:
@@ -337,7 +338,8 @@ if __name__ == "__main__":
         system_prompt=system_prompt,
         user_prompt_template=user_prompt_template,
         user_info=user_info,
-        max_rounds=10
+        max_rounds=5,
+        possible_faults=possible_faults["22"]
     )
     
     # Start interactive chat
